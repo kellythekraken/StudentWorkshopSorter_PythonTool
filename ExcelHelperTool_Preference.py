@@ -2,6 +2,8 @@ from openpyxl import load_workbook
 import random, os
 
 # COLUMN: VERTICAL NEWSPAPER COLUMNS | ROW: HORIZONTAL SEATS
+# NOTE: Make the length of the column read automatically
+# TODO: Cleanup the variable name, e.g. consistent workshop OR class
 
 # Modifiable Variables
 excel_file_name = 'StudentWorkshop_SampleExcelSheet.xlsx'
@@ -13,7 +15,6 @@ first_name_column = 2 #B
 name_start_row = 2 # the row where student's name start
 preference_start_column = 4 #D
 preference_end_column = 13 #M
-# NOTE: Make the length of the column read automatically
 
 num_workshops_for_students = 5  # Number of workshops each student must take
 num_workshop_rounds = 5   # Number of rounds of each workshop class
@@ -133,10 +134,6 @@ student_preference_dict, students_with_no_preference = Fetch_Student_Preference_
 
 # NOTE: (statistic data can be collected at this point)
 
-print("STUDENT WITH PREFERENCE:",len(student_preference_dict),"\n STUDENT WITH NO PREFERENCE:",len(students_with_no_preference))
-#for key, value in student_preference_dict.items():
-#    print(f"{key}, : {value}")
-
 # Calculate how many student should be in each class, if this num exceed 13 then keep it 13.
 def Calculate_Max_Students_Per_Class():
     number_of_students = len(student_names)
@@ -150,22 +147,19 @@ def Calculate_Max_Students_Per_Class():
 def Sort_Student_to_Workshop_by_Preference():
     dict_student_classschedules = {key: [] for key in student_names}  # Keep track of each student and their class
 
-    #keep track of the classes still available, to avoid further calculation
-    available_classes = workshop_list
     # Create dict consist of class name and 5 lists of student in each session
     class_dict = {} # {Textil:[[student A,B,C],[student D,E,F],[student G,H,I]]; }
+
+    #keep track of the classes still available
+    available_classes = workshop_list
+    
     for a in range(len(workshop_list)):
         class_name = workshop_list[a]
         class_list = []
         for b in range(num_workshop_rounds):
             class_list.append([])
         class_dict[class_name] = class_list
-    '''
-    for key, value in class_dict.items():
-        print(key)
-        for sublist in value:
-           print(sublist)
-    '''
+
     max_class_size = Calculate_Max_Students_Per_Class()
 
     for i in range(num_workshop_rounds):
@@ -174,7 +168,11 @@ def Sort_Student_to_Workshop_by_Preference():
         for student in student_preference_dict:
             # Get their 1st choice
             student_choice =  student_preference_dict[student][0]
-                        
+            
+            while student_choice not in available_classes:
+                del student_preference_dict[student][0]
+                student_choice =  student_preference_dict[student][0]
+
             # retrieve the list of sessions from the chosen class
             chosen_class_sessions = class_dict[student_choice]
             
@@ -184,15 +182,14 @@ def Sort_Student_to_Workshop_by_Preference():
             # keep looping through the list of student's pref list until they're filled to the next class
             while len(session_with_least_students) >= max_class_size:
                 # remove the preference for fully occupied class
-                available_classes.remove(student_choice)
-                while student_choice not in available_classes:
+                if student_choice in available_classes:
                     available_classes.remove(student_choice)
-                    print(student_choice,"should be removed from the available list")
-                    del student_preference_dict[student][0]
-                    student_choice = student_preference_dict[0]
+                    print("remove",student_choice,"from available class")
                 
+                del student_preference_dict[student][0]
                 if not student_preference_dict[student]:
                     print("WARNING!",student,"cannot be assigned in ANY class because they're all full")
+                    # do something!
                     break
                 
                 #get the next available class on the pref list
@@ -213,13 +210,20 @@ def Sort_Student_to_Workshop_by_Preference():
             dict_student_classschedules[student].append(student_choice)
 
             # go to the next student
-    print("available class left:",available_classes)
+    print("available class left:", available_classes)
 
     # go through the list of student with no pref in the end
-    '''
+    
     for i in range(num_workshop_rounds):
         for student in students_with_no_preference:
-            # get the available class
+            # get all available class
+            random_class_choice = random.choice(available_classes)
+            # pick a random class, access their list of 5 sessions
+
+            # take the session with least number of people
+            # if all sessions are full, remove this class from the available class
+            # if there're no available class, fill the student to a random class?
+
             smallest_class_length = min(len(lst) for lst in dict_classes_count.values())
 
             # Get all keys with lists of that length
@@ -232,7 +236,7 @@ def Sort_Student_to_Workshop_by_Preference():
                 available_class_for_student = [idx for idx in class_names if idx not in dict_students_assigned_classes.get(name, [])]
             
             chosen_class = random.choice(available_class_for_student) 
-'''
+
     # Print the summary
     print("**********CLASS SUMMARY*****************")
     for key, value in class_dict.items():
