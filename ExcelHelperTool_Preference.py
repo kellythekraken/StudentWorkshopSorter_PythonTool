@@ -300,7 +300,7 @@ def Excel_Update_Student_Schedule(student_schedule_dict):
             col += 1
         
         row += 1  # Move to the next row for the next list
-    workbook.save(excel_file_name)
+    workbook.save(file_path)
 
 # Execution code
 # Cells_Cleanup(2, 15, None, 19)
