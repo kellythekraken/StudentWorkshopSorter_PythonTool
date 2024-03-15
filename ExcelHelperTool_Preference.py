@@ -1,11 +1,9 @@
 from openpyxl import load_workbook
 import random, os, math
 
-# COLUMN: VERTICAL NEWSPAPER COLUMNS | ROW: HORIZONTAL SEATS
-# NOTE: Make the length of the column read automatically
-# TODO: Cleanup the variable name, e.g. consistent workshop OR class
+# TODO: Cleanup the workshop_nameiable name, e.g. consistent workshop OR class
 
-# Modifiable Variables
+# ============= Workshop variables to be customized =============================== #
 excel_file_name = 'StudentWorkshop_SampleExcelSheet.xlsx'
 wunsch_sheetname = 'Wuensche'
 class_timetable_sheetname = 'Timetable'
@@ -13,12 +11,13 @@ class_timetable_sheetname = 'Timetable'
 last_name_column = 1 #A
 first_name_column = 2 #B
 name_start_row = 2 # the row where student's name start
-preference_start_column = 4 #D
-preference_end_column = 13 #M
+workshop_name_start_column = 4 #D 
+student_schedule_column = 15 #O
 
 num_workshops_for_students = 5  # Number of workshops each student must take
-num_workshop_rounds = 5   # Number of rounds of each workshop class
+num_workshop_rounds = 5   # Number of sessions/rounds each workshop provides
 
+# ============== Do not edit the variables beyond this point! ===================== #
 current_directory = os.path.dirname(os.path.abspath(__file__))
 file_path = os.path.join(current_directory, excel_file_name)
 workbook = load_workbook(file_path)
@@ -27,13 +26,17 @@ sheet = workbook.get_sheet_by_name(wunsch_sheetname)
 # Load class name in order from excel
 def load_workshop_names_from_excel():
     list = []
-    num = preference_end_column - preference_start_column + 1
-    current_column = preference_start_column
-    for i in range(num):
-        var = sheet.cell(row = 1, column = current_column).value
-        list.append(var)
-        current_column += 1
-    return list
+    current_column = workshop_name_start_column
+
+    while True:
+        workshop_name = sheet.cell(row = 1, column = current_column).value
+        if workshop_name is not None:
+            list.append(workshop_name)
+            current_column += 1
+        else:
+            pref_end_column = current_column - 1
+            break
+    return list, pref_end_column
 
 # Load student and group name from excel
 def load_student_names_from_excel():
@@ -52,13 +55,17 @@ def load_student_names_from_excel():
             break
     return names
 
-# Static variables
-workshop_list = load_workshop_names_from_excel()
+# Static workshop_nameiables
 student_names = load_student_names_from_excel()
+workshop_list, preference_end_column = load_workshop_names_from_excel()
 
 # Erase the specified range of cells for student schedules
-def Cells_Cleanup(start_row, start_col, end_col):
-    end_row = start_row + len(student_names)
+def Cells_Cleanup(start_row, start_col, end_row = None, end_col = None):
+    #if end row or end col is not definied, the clean up will be executed until a blank row/col is met.
+    if not end_row: 
+        end_row = start_row + len(student_names)
+    if not end_col:
+        end_col = None
 
     for row in sheet.iter_rows(min_row=end_row + 1, min_col=4, max_col=4):
         if row[0].value is not None:
@@ -79,7 +86,7 @@ def Fetch_Student_Preference_List():
     dict_student_pref = {}
     students_with_no_pref = []
     current_row = name_start_row
-    workshop_choices = preference_end_column - preference_start_column + 1 #calculate how many workshops to choose from
+    workshop_choices = preference_end_column - workshop_name_start_column + 1 #calculate how many workshops to choose from
 
     # Loop through all students until the next empty row
     while True:
@@ -89,7 +96,7 @@ def Fetch_Student_Preference_List():
         # for each student:
         if last_name is not None and first_name is not None:
             full_name = f"{last_name} {first_name}"
-            curr_pref_column = preference_start_column
+            curr_pref_column = workshop_name_start_column
             int_preference_list = []
 
             # loop through all preference column and construct a list 
@@ -281,9 +288,23 @@ def Sort_Student_to_Workshop_by_Preference():
    
     return dict_student_classschedules  
 
+# Update excel with list of classes for each student 
+def Excel_Update_Student_Schedule(student_schedule_dict):
+    row = name_start_row # starting row 
 
-#    cells_cleanup(4,4,59)
+    for student, classes in student_schedule_dict.items():
+        col = student_schedule_column # Write each element from the list to columns D to H
+
+        for _class in classes:
+            sheet.cell(row=row, column=col, value = _class)
+            col += 1
+        
+        row += 1  # Move to the next row for the next list
+    workbook.save(excel_file_name)
+
+# Execution code
+# Cells_Cleanup(2, 15, None, 19)
 
 student_schedule = Sort_Student_to_Workshop_by_Preference()
 
-# Excel_Update_Student_Schedule(student_schedule)
+Excel_Update_Student_Schedule(student_schedule)
