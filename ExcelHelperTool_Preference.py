@@ -1,5 +1,5 @@
 from openpyxl import load_workbook
-import random, os
+import random, os, math
 
 # COLUMN: VERTICAL NEWSPAPER COLUMNS | ROW: HORIZONTAL SEATS
 # NOTE: Make the length of the column read automatically
@@ -53,7 +53,7 @@ def load_student_names_from_excel():
     return names
 
 # Static variables
-workshop_list = load_workshop_names_from_excel() 
+workshop_list = load_workshop_names_from_excel()
 student_names = load_student_names_from_excel()
 
 # Erase the specified range of cells for student schedules
@@ -132,15 +132,13 @@ def Sort_Preference_List(int_preflist):
     return sorted_workshop_preference
 student_preference_dict, students_with_no_preference = Fetch_Student_Preference_List()
 
-# NOTE: (statistic data can be collected at this point)
-
 # Calculate how many student should be in each class, if this num exceed 13 then keep it 13.
 def Calculate_Max_Students_Per_Class():
     number_of_students = len(student_names)
     number_of_workshops = len(workshop_list)
     average = (number_of_students * num_workshops_for_students) / (number_of_workshops * num_workshop_rounds)
-    average = round(average) - 1
-    if(average > 13): average = 13
+    average = math.ceil(average)
+    if average > 13: average = 13
     return average
 
 # Main logic to sort students to workshop based on their preference
@@ -151,7 +149,7 @@ def Sort_Student_to_Workshop_by_Preference():
     class_dict = {} # {Textil:[[student A,B,C],[student D,E,F],[student G,H,I]]; }
 
     #keep track of the classes still available
-    available_classes = workshop_list
+    available_classes = workshop_list.copy()
     
     for a in range(len(workshop_list)):
         class_name = workshop_list[a]
@@ -162,6 +160,7 @@ def Sort_Student_to_Workshop_by_Preference():
 
     max_class_size = Calculate_Max_Students_Per_Class()
 
+    # Assign classes according to student's preference
     for i in range(num_workshop_rounds):
         # loop through all students
 
@@ -210,34 +209,65 @@ def Sort_Student_to_Workshop_by_Preference():
             dict_student_classschedules[student].append(student_choice)
 
             # go to the next student
+
     print("available class left:", available_classes)
 
-    # go through the list of student with no pref in the end
-    
+    # Assign classes for students with no preference
     for i in range(num_workshop_rounds):
+        available_class_reset = False
         for student in students_with_no_preference:
-            # get all available class
-            random_class_choice = random.choice(available_classes)
-            # pick a random class, access their list of 5 sessions
+            # get the list of class taken by current student, remove them from the available choice 
+            classes_already_taken = dict_student_classschedules[student]
+            class_to_choose_from = [x for x in available_classes if x not in classes_already_taken]
 
-            # take the session with least number of people
-            # if all sessions are full, remove this class from the available class
-            # if there're no available class, fill the student to a random class?
+            # if there're no available class, open up class that are already filled.
+            if not class_to_choose_from or not available_classes:
+                available_classes = workshop_list.copy()
+                available_class_reset = True
+                class_to_choose_from = [x for x in available_classes if x not in classes_already_taken]
+                print("No available classes found! Opening up the class number limitation.")
 
-            smallest_class_length = min(len(lst) for lst in dict_classes_count.values())
-
-            # Get all keys with lists of that length
-            smallest_classes = [key for key, lst in dict_classes_count.items() if len(lst) == smallest_class_length]
-
-            # available_class_for_student
-            available_class_for_student = [idx for idx in smallest_classes if idx not in dict_students_assigned_classes.get(name, [])]
-
-            if not available_class_for_student: #if all are taken, use the original complete list
-                available_class_for_student = [idx for idx in class_names if idx not in dict_students_assigned_classes.get(name, [])]
+            # Create a temporary copy of the dict, remove the class that's already taken by student.
+            new_class_dict = class_dict.copy()
+            for key in class_to_choose_from:
+                if key not in new_class_dict:
+                    new_class_dict.pop(key)
             
-            chosen_class = random.choice(available_class_for_student) 
+            # Calculate the sum of total students for each workshop in the new dict
+            total_student_in_each_workshop = {key: sum(len(sublist) for sublist in value) for key, value in new_class_dict.items()}
+
+            # Pick the class with the least number of students in total
+            class_with_least_students = min(total_student_in_each_workshop, key=total_student_in_each_workshop.get)
+            chosen_workshop_sessions = class_dict[class_with_least_students]
+            # take the session with least number of people
+            session_with_least_students = min(chosen_workshop_sessions, key=len)
+
+            if not available_class_reset:
+                # if all sessions are full, remove this class from the available class
+                while len(session_with_least_students) >= max_class_size:
+                    #print("in the while loop")
+                    if class_with_least_students in available_classes:
+                        print(class_with_least_students,"is full!")
+                        available_classes.remove(class_with_least_students)
+                    
+                    if not available_classes:
+                        print("WARNING! No more available class!")
+                        # available_classes = workshop_list
+                        break
+                    
+                    random_class_choice = random.choice(class_to_choose_from)
+                    chosen_workshop_sessions = class_dict[random_class_choice]
+                    session_with_least_students = min(chosen_workshop_sessions, key=len)
+            
+            # Assign student to the session
+            class_index = chosen_workshop_sessions.index(session_with_least_students)
+            class_dict[class_with_least_students][class_index].append(student)
+            
+            # put the class in the student's timetable
+            dict_student_classschedules[student].append(class_with_least_students)
 
     # Print the summary
+
     print("**********CLASS SUMMARY*****************")
     for key, value in class_dict.items():
         print(key)
@@ -248,36 +278,12 @@ def Sort_Student_to_Workshop_by_Preference():
     for key, value in dict_student_classschedules.items():
         print(key)
         print(len(value),":",value)
-    
+   
     return dict_student_classschedules  
-    
-'''
-    for round in range(1, num_workshops + 1): 
-        
-        dict_classes_count = {key: [] for key in workshop_list} #dict_student_pref with {classes : [student1,2,3]}
 
-        for name in student_names:
-            # Find the length of the smallest class in the available ones
-            smallest_class_length = min(len(lst) for lst in dict_classes_count.values())
 
-            # Get all keys with lists of that length
-            smallest_classes = [key for key, lst in dict_classes_count.items() if len(lst) == smallest_class_length]
-
-            # available_class_for_student
-            available_class_for_student = [idx for idx in smallest_classes if idx not in dict_student_classschedules.get(name, [])]
-
-            if not available_class_for_student: #if all are taken, use the original complete list
-                available_class_for_student = [idx for idx in class_names if idx not in dict_student_classschedules.get(name, [])]
-            
-            chosen_class = random.choice(available_class_for_student) 
-
-            # Add the new class for this student to the dictW
-            dict_student_classschedules[name].append(chosen_class)
-            # add this student to dict_classes_count to keep track how many are in each every round
-            dict_classes_count[chosen_class].append(name)
-
-        #after looping through all students, write down dict_classes_count before they're renewed
-#        Excel_Update_Students_In_Class(dict_classes_count,round)
-'''
+#    cells_cleanup(4,4,59)
 
 student_schedule = Sort_Student_to_Workshop_by_Preference()
+
+# Excel_Update_Student_Schedule(student_schedule)
