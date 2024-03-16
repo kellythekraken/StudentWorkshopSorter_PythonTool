@@ -227,6 +227,7 @@ def Sort_Student_to_Workshop_by_Preference():
             classes_already_taken = dict_student_classschedules[student]
             class_to_choose_from = [x for x in available_classes if x not in classes_already_taken]
 
+            # select the intesection of class to choose from AND new class dict
             # if there're no available class, open up class that are already filled.
             if not class_to_choose_from or not available_classes:
                 available_classes = workshop_list.copy()
@@ -235,11 +236,8 @@ def Sort_Student_to_Workshop_by_Preference():
                 print("No available classes found! Opening up the class number limitation.")
 
             # Create a temporary copy of the dict, remove the class that's already taken by student.
-            new_class_dict = class_dict.copy()
-            for key in class_to_choose_from:
-                if key not in new_class_dict:
-                    new_class_dict.pop(key)
-            
+            new_class_dict = {key: value for key, value in class_dict.items() if key in class_to_choose_from}
+
             # Calculate the sum of total students for each workshop in the new dict
             total_student_in_each_workshop = {key: sum(len(sublist) for sublist in value) for key, value in new_class_dict.items()}
 
@@ -252,7 +250,7 @@ def Sort_Student_to_Workshop_by_Preference():
             if not available_class_reset:
                 # if all sessions are full, remove this class from the available class
                 while len(session_with_least_students) >= max_class_size:
-                    #print("in the while loop")
+                    print("in the while loop")
                     if class_with_least_students in available_classes:
                         print(class_with_least_students,"is full!")
                         available_classes.remove(class_with_least_students)
@@ -274,7 +272,6 @@ def Sort_Student_to_Workshop_by_Preference():
             dict_student_classschedules[student].append(class_with_least_students)
 
     # Print the summary
-
     print("**********CLASS SUMMARY*****************")
     for key, value in class_dict.items():
         print(key)
@@ -285,8 +282,10 @@ def Sort_Student_to_Workshop_by_Preference():
     for key, value in dict_student_classschedules.items():
         print(key)
         print(len(value),":",value)
-   
     return dict_student_classschedules  
+
+def Excel_Update():
+    sheet['A1'] = 'Hello'
 
 # Update excel with list of classes for each student 
 def Excel_Update_Student_Schedule(student_schedule_dict):
@@ -303,7 +302,7 @@ def Excel_Update_Student_Schedule(student_schedule_dict):
     workbook.save(file_path)
 
 # Execution code
-# Cells_Cleanup(2, 15, None, 19)
+Cells_Cleanup(2, 15, None, 19)
 
 student_schedule = Sort_Student_to_Workshop_by_Preference()
 
