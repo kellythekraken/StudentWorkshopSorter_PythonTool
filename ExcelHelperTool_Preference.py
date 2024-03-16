@@ -125,6 +125,9 @@ def Fetch_Student_Preference_List():
     
     return dict_student_pref, students_with_no_pref
 
+def sublist_length(sublist):
+    return len(sublist) if sublist is not None else float('inf')  # Use infinity for None to ensure they are placed at the end
+
 # Translate the value to class name and arrange them from favorite -> least favorite
 def Sort_Preference_List(int_preflist):
     # int_preflist will looks like: [1,3,6,7,4,10]
@@ -148,9 +151,22 @@ def Calculate_Max_Students_Per_Class():
     if average > 13: average = 13
     return average
 
+# Rearrange student's schedule based on the order of the class
+def Rearrange_Student_Schedule(student_schedule_dict):
+    # student_preference_dict: student_A:{[]:2,[],10}
+    converted_dict = {}
+    for key, value in student_schedule_dict.items():
+        sorted_subdict = sorted(value.items(), key=lambda x: x[1])
+        converted_list = [item[0] for item in sorted_subdict]
+        converted_dict[key] = converted_list
+
+    #for k,v in converted_dict.items():
+        #print(k,":",v)
+    return converted_dict
+    
 # Main logic to sort students to workshop based on their preference
 def Sort_Student_to_Workshop_by_Preference():
-    dict_student_classschedules = {key: [] for key in student_names}  # Keep track of each student and their class
+    dict_student_classschedules = {key: {} for key in student_names}  # Keep track of each student and their class
 
     # Create dict consist of class name and 5 lists of student in each session
     class_dict = {} # {Textil:[[student A,B,C],[student D,E,F],[student G,H,I]]; }
@@ -170,56 +186,72 @@ def Sort_Student_to_Workshop_by_Preference():
     # Assign classes according to student's preference
     for i in range(num_workshop_rounds):
         # loop through all students
-
         for student in student_preference_dict:
             # Get their 1st choice
             student_choice =  student_preference_dict[student][0]
-            
+            '''
             while student_choice not in available_classes:
                 del student_preference_dict[student][0]
                 student_choice =  student_preference_dict[student][0]
-
+            '''
             # retrieve the list of sessions from the chosen class
             chosen_class_sessions = class_dict[student_choice]
             
+            # Filter out the index of session that student's are already occupied with
+            classindexes = list(dict_student_classschedules[student].values())
+            classindexes.sort()
+            #the classindexes calculation is correct, but somehow still taken into account and not excluded.
+
+            available_sessions_to_take = chosen_class_sessions.copy()
+            for i in classindexes:
+                available_sessions_to_take[i] = None
+
             # Find the length of the smallest class in the available ones, sort student to that class
-            session_with_least_students = min(chosen_class_sessions, key=len)
+            session_with_least_students = min(filter(lambda x: x is not None, available_sessions_to_take), key=sublist_length)
 
             # keep looping through the list of student's pref list until they're filled to the next class
             while len(session_with_least_students) >= max_class_size:
-                # remove the preference for fully occupied class
-                if student_choice in available_classes:
-                    available_classes.remove(student_choice)
-                    print("remove",student_choice,"from available class")
-                
+                # remove the preference for occupied class
                 del student_preference_dict[student][0]
+
                 if not student_preference_dict[student]:
-                    print("WARNING!",student,"cannot be assigned in ANY class because they're all full")
+                    print("WARNING!",student,"cannot be assigned in ANY class because they're all full.")
                     # do something!
                     break
-                
                 #get the next available class on the pref list
                 student_choice = student_preference_dict[student][0]
                 
-                # loop and find the next available choice
                 chosen_class_sessions = class_dict[student_choice]
-                session_with_least_students = min(chosen_class_sessions, key=len)
+                available_sessions_to_take = chosen_class_sessions.copy()
+                for index in classindexes:
+                    available_sessions_to_take[index] = None
+
+                session_with_least_students = min(filter(lambda x: x is not None, available_sessions_to_take), key=sublist_length)
             
             # remove the class from their list
             del student_preference_dict[student][0]
+
             # assign student to that session
-            class_index = chosen_class_sessions.index(session_with_least_students)
+            class_index = available_sessions_to_take.index(session_with_least_students)
             class_dict[student_choice][class_index].append(student)
             
             # put the class in the student's timetable
-            # TODO: ALSO print the preference value? if possible, to check if it's fair.
-            dict_student_classschedules[student].append(student_choice)
-
+            dict_student_classschedules[student].update({student_choice : class_index})
             # go to the next student
 
-    print("available class left:", available_classes)
-
+    # Remove the fully occupied class here? Because the class might not be completely full 
+    # when the student can't fill in the class schedule
+    # loop through the available class and get rid of the actual full one here
+    '''
+    if student_choice in available_classes:
+        available_classes.remove(student_choice)
+        print("remove",student_choice,"from available class")
+    '''
+    # print("available class left:", available_classes)
+    
     # Assign classes for students with no preference
+    # calculate the smallest session instead of smallest sum of class?
+    '''
     for i in range(num_workshop_rounds):
         available_class_reset = False
         for student in students_with_no_preference:
@@ -244,8 +276,19 @@ def Sort_Student_to_Workshop_by_Preference():
             # Pick the class with the least number of students in total
             class_with_least_students = min(total_student_in_each_workshop, key=total_student_in_each_workshop.get)
             chosen_workshop_sessions = class_dict[class_with_least_students]
+
+            # access the index of classes students are taking
+            classindexes = list(dict_student_classschedules[student].values())
+            # remove those from consideration in this min()???
+            classindexes.sort()
+            available_sessions_to_take = chosen_workshop_sessions.copy()
+
+            for index in classindexes:
+                available_sessions_to_take[index] = None
+
             # take the session with least number of people
-            session_with_least_students = min(chosen_workshop_sessions, key=len)
+            session_with_least_students = min(filter(lambda x: x is not None, chosen_workshop_sessions), key=sublist_length)
+            #session_with_least_students = min(chosen_workshop_sessions, key=len)
 
             if not available_class_reset:
                 # if all sessions are full, remove this class from the available class
@@ -269,23 +312,21 @@ def Sort_Student_to_Workshop_by_Preference():
             class_dict[class_with_least_students][class_index].append(student)
             
             # put the class in the student's timetable
-            dict_student_classschedules[student].append(class_with_least_students)
-
+            dict_student_classschedules[student].update({class_with_least_students : class_index})
+    '''
     # Print the summary
+    
     print("**********CLASS SUMMARY*****************")
     for key, value in class_dict.items():
         print(key)
         for sublist in value:
             print(len(sublist),":",sublist)
-
+    
     print("\n\n**********STUDENT SCHEDULE*****************")
     for key, value in dict_student_classschedules.items():
         print(key)
         print(len(value),":",value)
     return dict_student_classschedules  
-
-def Excel_Update():
-    sheet['A1'] = 'Hello'
 
 # Update excel with list of classes for each student 
 def Excel_Update_Student_Schedule(student_schedule_dict):
@@ -304,6 +345,7 @@ def Excel_Update_Student_Schedule(student_schedule_dict):
 # Execution code
 Cells_Cleanup(2, 15, None, 19)
 
-student_schedule = Sort_Student_to_Workshop_by_Preference()
+student_schedule_dict = Sort_Student_to_Workshop_by_Preference()
+student_schedule = Rearrange_Student_Schedule(student_schedule_dict)
 
 Excel_Update_Student_Schedule(student_schedule)
