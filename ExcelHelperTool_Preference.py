@@ -151,19 +151,10 @@ def Calculate_Max_Students_Per_Class():
     if average > 13: average = 13
     return average
 
-# Rearrange student's schedule based on the order of the class
-def Rearrange_Student_Schedule(student_schedule_dict):
-    # student_preference_dict: student_A:{[]:2,[],10}
-    converted_dict = {}
-    for key, value in student_schedule_dict.items():
-        sorted_subdict = sorted(value.items(), key=lambda x: x[1])
-        converted_list = [item[0] for item in sorted_subdict]
-        converted_dict[key] = converted_list
+# Return bool to check if all sessions of a class is full
+def Class_is_Full(class_sessions, maximum):
+    return all(len(sublist) >= maximum for sublist in class_sessions)
 
-    #for k,v in converted_dict.items():
-        #print(k,":",v)
-    return converted_dict
-    
 # Main logic to sort students to workshop based on their preference
 def Sort_Student_to_Workshop_by_Preference():
     dict_student_classschedules = {key: {} for key in student_names}  # Keep track of each student and their class
@@ -238,17 +229,7 @@ def Sort_Student_to_Workshop_by_Preference():
             # put the class in the student's timetable
             dict_student_classschedules[student].update({student_choice : class_index})
             # go to the next student
-
-    # Remove the fully occupied class here? Because the class might not be completely full 
-    # when the student can't fill in the class schedule
-    # loop through the available class and get rid of the actual full one here
-    '''
-    if student_choice in available_classes:
-        available_classes.remove(student_choice)
-        print("remove",student_choice,"from available class")
-    '''
-    # print("available class left:", available_classes)
-    
+   
     # Assign classes for students with no preference
     # calculate the smallest session instead of smallest sum of class?
     '''
@@ -293,7 +274,6 @@ def Sort_Student_to_Workshop_by_Preference():
             if not available_class_reset:
                 # if all sessions are full, remove this class from the available class
                 while len(session_with_least_students) >= max_class_size:
-                    print("in the while loop")
                     if class_with_least_students in available_classes:
                         print(class_with_least_students,"is full!")
                         available_classes.remove(class_with_least_students)
@@ -313,9 +293,14 @@ def Sort_Student_to_Workshop_by_Preference():
             
             # put the class in the student's timetable
             dict_student_classschedules[student].update({class_with_least_students : class_index})
+        
+        # loop through the available class and get rid of the actual full one here
+        for c in available_classes:
+            if Class_is_Full(c,max_class_size):
+                available_classes.remove(c)
+                print("remove",c,"from available class")
     '''
     # Print the summary
-    
     print("**********CLASS SUMMARY*****************")
     for key, value in class_dict.items():
         print(key)
@@ -328,6 +313,19 @@ def Sort_Student_to_Workshop_by_Preference():
         print(len(value),":",value)
     return dict_student_classschedules  
 
+# Rearrange student's schedule based on the order of the class
+def Rearrange_Student_Schedule(student_schedule_dict):
+    # student_preference_dict: student_A:{[]:2,[],10}
+    converted_dict = {}
+    for key, value in student_schedule_dict.items():
+        sorted_subdict = sorted(value.items(), key=lambda x: x[1])
+        converted_list = [item[0] for item in sorted_subdict]
+        converted_dict[key] = converted_list
+
+    #for k,v in converted_dict.items():
+        #print(k,":",v)
+    return converted_dict
+    
 # Update excel with list of classes for each student 
 def Excel_Update_Student_Schedule(student_schedule_dict):
     row = name_start_row # starting row 
