@@ -152,8 +152,14 @@ def Calculate_Max_Students_Per_Class():
     return average
 
 # Return bool to check if all sessions of a class is full
-def Class_is_Full(class_sessions, maximum):
-    return all(len(sublist) >= maximum for sublist in class_sessions)
+def Remove_Full_Class(max_class_size, dict,available_classes):
+    max_class_size_total = max_class_size * num_workshop_rounds
+    for key,list_of_sublists in dict.items():
+        total_students = sum(len(sublist) for sublist in list_of_sublists)
+        if total_students >= max_class_size_total:
+            if key in available_classes:
+                print(key,"is now completely full!")
+                available_classes.remove(key)
 
 # Main logic to sort students to workshop based on their preference
 def Sort_Student_to_Workshop_by_Preference():
@@ -229,28 +235,25 @@ def Sort_Student_to_Workshop_by_Preference():
             # put the class in the student's timetable
             dict_student_classschedules[student].update({student_choice : class_index})
             # go to the next student
-   
+
+   # Remove available class
+    Remove_Full_Class(max_class_size,class_dict,available_classes)
+
     # Assign classes for students with no preference
     # calculate the smallest session instead of smallest sum of class?
-    '''
+    #'''
     for i in range(num_workshop_rounds):
-        available_class_reset = False
         for student in students_with_no_preference:
             # get the list of class taken by current student, remove them from the available choice 
             classes_already_taken = dict_student_classschedules[student]
             class_to_choose_from = [x for x in available_classes if x not in classes_already_taken]
 
-            # select the intesection of class to choose from AND new class dict
-            # if there're no available class, open up class that are already filled.
             if not class_to_choose_from or not available_classes:
-                available_classes = workshop_list.copy()
-                available_class_reset = True
-                class_to_choose_from = [x for x in available_classes if x not in classes_already_taken]
-                print("No available classes found! Opening up the class number limitation.")
+                print("No available classes found! Find another solution for this")
 
             # Create a temporary copy of the dict, remove the class that's already taken by student.
             new_class_dict = {key: value for key, value in class_dict.items() if key in class_to_choose_from}
-
+            
             # Calculate the sum of total students for each workshop in the new dict
             total_student_in_each_workshop = {key: sum(len(sublist) for sublist in value) for key, value in new_class_dict.items()}
 
@@ -268,38 +271,37 @@ def Sort_Student_to_Workshop_by_Preference():
                 available_sessions_to_take[index] = None
 
             # take the session with least number of people
-            session_with_least_students = min(filter(lambda x: x is not None, chosen_workshop_sessions), key=sublist_length)
-            #session_with_least_students = min(chosen_workshop_sessions, key=len)
+            session_with_least_students = min(filter(lambda x: x is not None, available_sessions_to_take), key=sublist_length)
+            
+            while len(session_with_least_students) >= max_class_size:
+                total_student_in_each_workshop.pop(class_with_least_students) # dict of class name : number of total students
+                
+                if not total_student_in_each_workshop:
+                    print("WARNING! No more available class for", student,"\n",class_with_least_students,"will exceed the maximum")
+                    # DO SOMETHING
+                    break
+                # Pick the class with the least number of students in total
+                class_with_least_students = min(total_student_in_each_workshop, key=total_student_in_each_workshop.get)
+                chosen_workshop_sessions = class_dict[class_with_least_students]
 
-            if not available_class_reset:
-                # if all sessions are full, remove this class from the available class
-                while len(session_with_least_students) >= max_class_size:
-                    if class_with_least_students in available_classes:
-                        print(class_with_least_students,"is full!")
-                        available_classes.remove(class_with_least_students)
-                    
-                    if not available_classes:
-                        print("WARNING! No more available class!")
-                        # available_classes = workshop_list
-                        break
-                    
-                    random_class_choice = random.choice(class_to_choose_from)
-                    chosen_workshop_sessions = class_dict[random_class_choice]
-                    session_with_least_students = min(chosen_workshop_sessions, key=len)
+                available_sessions_to_take = chosen_workshop_sessions.copy()
+
+                for index in classindexes:  #index is already previously calculated
+                    available_sessions_to_take[index] = None
+                
+                session_with_least_students = min(filter(lambda x: x is not None, available_sessions_to_take), key=sublist_length)
             
             # Assign student to the session
-            class_index = chosen_workshop_sessions.index(session_with_least_students)
+            class_index = available_sessions_to_take.index(session_with_least_students)
             class_dict[class_with_least_students][class_index].append(student)
             
             # put the class in the student's timetable
             dict_student_classschedules[student].update({class_with_least_students : class_index})
         
         # loop through the available class and get rid of the actual full one here
-        for c in available_classes:
-            if Class_is_Full(c,max_class_size):
-                available_classes.remove(c)
-                print("remove",c,"from available class")
-    '''
+        Remove_Full_Class(max_class_size,class_dict,available_classes)
+    #'''
+    
     # Print the summary
     print("**********CLASS SUMMARY*****************")
     for key, value in class_dict.items():
@@ -307,12 +309,14 @@ def Sort_Student_to_Workshop_by_Preference():
         for sublist in value:
             print(len(sublist),":",sublist)
     
+    '''
     print("\n\n**********STUDENT SCHEDULE*****************")
     for key, value in dict_student_classschedules.items():
         print(key)
         print(len(value),":",value)
+    '''
     return dict_student_classschedules  
-
+    
 # Rearrange student's schedule based on the order of the class
 def Rearrange_Student_Schedule(student_schedule_dict):
     # student_preference_dict: student_A:{[]:2,[],10}
