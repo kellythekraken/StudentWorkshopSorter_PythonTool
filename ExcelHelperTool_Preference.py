@@ -4,7 +4,7 @@ import os, math
 # TODO: Remove useless code?
 
 # ============= Workshop variables to be customized =============================== #
-excel_file_name = 'StudentWorkshop_SampleExcelSheet.xlsx'
+excel_file_name = 'Liste_Einteilung Wünsche_Filled.xlsx' #'StudentWorkshop_SampleExcelSheet.xlsx'
 sheetname = 'WerkstattStundenplan'
 
 last_name_column = 1 #A
@@ -59,6 +59,7 @@ def load_student_names_from_excel():
 student_names = load_student_names_from_excel()
 workshop_list, preference_end_column = load_workshop_names_from_excel()
 
+# DEBUG: Make this flexible so it clears until the next blank row & column
 # Erase the specified range of cells for student schedules
 def Cells_Cleanup(start_row, start_col, end_row = None, end_col = None):
     #if end row or end col is not definied, the clean up will be executed until a blank row/col is met.
@@ -144,26 +145,67 @@ student_preference_dict, students_with_no_preference = Fetch_Student_Preference_
 def Calculate_Max_Students_Per_Workshop():
     number_of_students = len(student_names)
     number_of_workshops = len(workshop_list)
-    average = (number_of_students * num_workshops_for_students) / (number_of_workshops * num_workshop_rounds)
-    average = math.ceil(average)
-    if average > 13: average = 13
-    return average
+    maximum = (number_of_students * num_workshops_for_students) / (number_of_workshops * num_workshop_rounds)
+    maximum = math.ceil(maximum)
+    if maximum > 13: maximum = 13
+    maximum -= 1
+    return maximum
+
+dict_student_schedules = {key: {} for key in student_names}  # Keep track of each student and their workshop
+dict_workshop_students = {} # Consist workshop name and 5 lists of student in each session: {Textil:[[student A,B,C],[student D,E,F],[student G,H,I]]; }
+max_workshop_size = Calculate_Max_Students_Per_Workshop()
+print(max_workshop_size)
 
 # Return bool to check if all sessions of a workshop is full
-def Remove_Full_Workshop(max_per_workshop, dict, available_workshops):
+def Remove_Full_Workshop(max_per_workshop, available_workshops):
     maximum_total_students = max_per_workshop * num_workshop_rounds
-    for key,list_of_sublists in dict.items():
+    for key,list_of_sublists in dict_workshop_students.items():
         total_students = sum(len(sublist) for sublist in list_of_sublists)
         if total_students >= maximum_total_students:
             if key in available_workshops:
                 available_workshops.remove(key)
+                print(key,"is full!")
+
+def Get_Student_Missing_Session(list_to_compare):
+    full_schedule_integer = set(range(5)) # a set of 0-4 to check which session  missing in the list
+    missing_session = full_schedule_integer - set(list_to_compare)
+    missing_session = missing_session.pop()
+    return missing_session
+
+# go through EACH in workshops already taken and see if any can be replaced with another session
+def Rearrange_Session_For_Repeated_Class(student, workshops_already_taken, missing_session):
+    for workshop, index in workshops_already_taken.items():
+        # make a dict of workshop/sessions with the session index
+        new_session_dict = {} # {workshopA : 11(number of students), ...}
+        for key, list_of_lists in dict_workshop_students.items():
+            if key not in workshops_already_taken:    # make sure not repeat the workshops
+                size = len(list_of_lists[index])
+                new_session_dict[key] = size
+        
+        # assign the index with the smallest workshop, if it's not full. Otherwise continue the loop
+        smallest_workshop = min(new_session_dict.items(), key=lambda x: x[1]) # return the pair ('workshopA', 11)
+
+        if smallest_workshop[1] < max_workshop_size:
+            # repeat the workshop for the missing session, and take a different workshop for the repeated session
+            dict_workshop_students[smallest_workshop[0]][index].append(student)   # exchanged workshop
+            dict_workshop_students[workshop][missing_session].append(student)   # repeat workshop
+
+            # remove student from the session where workshop is repeated
+            dict_workshop_students[workshop][index].remove(student)
+            # remove the student's schedule on the index
+            dict_student_schedules[student] = {key: value for key, value in dict_student_schedules[student].items() if value != index}
+
+            # update the workshops in the student's timetable
+            dict_student_schedules[student].update({smallest_workshop[0] : index})
+            dict_student_schedules[student].update({workshop : missing_session})
+            break
+        # if the workshop is full, move on to the next repeated workshop and try again
+    print(student,"took",smallest_workshop[0],"and rearranged",workshop)
+    
 
 # Main logic to sort students to workshop based on their preference
 def Sort_Student_to_Workshop_by_Preference():
-    dict_student_schedules = {key: {} for key in student_names}  # Keep track of each student and their workshop
-
-    # Create dict consist of workshop name and 5 lists of student in each session
-    dict_workshop_students = {} # {Textil:[[student A,B,C],[student D,E,F],[student G,H,I]]; }
+    global max_workshop_size
 
     for a in range(len(workshop_list)):
         w_name = workshop_list[a]
@@ -172,8 +214,6 @@ def Sort_Student_to_Workshop_by_Preference():
             w_list.append([])
         dict_workshop_students[w_name] = w_list
 
-    max_workshop_size = Calculate_Max_Students_Per_Workshop()
-
     #keep track of the workshops still available
     available_workshops = workshop_list.copy()
     
@@ -181,6 +221,8 @@ def Sort_Student_to_Workshop_by_Preference():
     for i in range(num_workshop_rounds):
         # loop through all students
         for student in student_preference_dict:
+            workshop_reorganized = False
+
             # Get their 1st choice
             student_choice = student_preference_dict[student][0]
 
@@ -204,8 +246,9 @@ def Sort_Student_to_Workshop_by_Preference():
                 del student_preference_dict[student][0]
 
                 if not student_preference_dict[student]:
-                    print("WARNING!",student,"cannot be assigned in ANY workshop because they're all full.")
-                    # do something!
+                    workshop_reorganized = True
+                    missing_session = Get_Student_Missing_Session(workshop_indexes)
+                    Rearrange_Session_For_Repeated_Class(student, dict_student_schedules[student], missing_session)
                     break
                 #get the next available workshop on the pref list
                 student_choice = student_preference_dict[student][0]
@@ -217,6 +260,8 @@ def Sort_Student_to_Workshop_by_Preference():
 
                 session_with_least_students = min(filter(lambda x: x is not None, available_sessions_to_take), key=sublist_length)
             
+            if workshop_reorganized: continue
+
             # remove the workshop from their list
             del student_preference_dict[student][0]
 
@@ -228,18 +273,28 @@ def Sort_Student_to_Workshop_by_Preference():
             dict_student_schedules[student].update({student_choice : workshop_index})
             # go to the next student
 
-    Remove_Full_Workshop(max_workshop_size,dict_workshop_students,available_workshops)
-
+    # Remove_Full_Workshop(max_workshop_size,dict_workshop_students,available_workshops)
+    max_workshop_size += 1 # real maximum
+    
     # Assign workshop for students with no preference
+    print("student with no pref:",students_with_no_preference)
+    #'''
     for i in range(num_workshop_rounds):
         # loop through the available workshop and get rid of the actual full one here
-        Remove_Full_Workshop(max_workshop_size,dict_workshop_students,available_workshops)
+        Remove_Full_Workshop(max_workshop_size,available_workshops)
 
         for student in students_with_no_preference:
             workshop_reorganized = False
             # get the list of workshop taken by current student, remove them from the available choice 
             workshops_already_taken = dict_student_schedules[student]
             workshops_to_choose = [x for x in available_workshops if x not in workshops_already_taken]
+            
+            # TODO: Case where student can only repeat class and the only available ones are all repeated. 
+                # (meaning they can't switch their existing class with the available one.)
+            if not workshops_to_choose:
+                print("no more workshop to choose for",student)
+                print("available workshops:",available_workshops,"workshops already taken:",workshops_already_taken)
+                continue
 
             # Create a temporary copy of the dict, remove the workshop that's already taken by student.
             new_dict_workshop_students = {key: value for key, value in dict_workshop_students.items() if key in workshops_to_choose}
@@ -269,39 +324,10 @@ def Sort_Student_to_Workshop_by_Preference():
                 if not total_student_in_each_workshop:
                     # get the index of the session student need to take
                     workshop_reorganized = True
-                    full_schedule_integer = set(range(5)) # a set of 0-4 to check which session  missing in the list
-                    missing_session = full_schedule_integer - set(workshop_indexes)
-                    missing_session = missing_session.pop()
 
                     # go through EACH in workshops already taken and see if any can be replaced with another session
-                    for workshop, index in workshops_already_taken.items():
-                        # make a dict of workshop/sessions with the session index
-                        new_session_dict = {} # {workshopA : 11(number of students), ...}
-                        for key, list_of_lists in dict_workshop_students.items():
-                            if key not in workshops_already_taken:    # make sure not repeat the workshops
-                                size = len(list_of_lists[index])
-                                new_session_dict[key] = size
-                        
-                        # assign the index with the smallest workshop, if it's not full. Otherwise continue the loop
-                        smallest_workshop = min(new_session_dict.items(), key=lambda x: x[1]) # return the pair ('workshopA', 11)
-
-                        if smallest_workshop[1] < max_workshop_size:
-                            # repeat the workshop for the missing session, and take a different workshop for the repeated session
-                            dict_workshop_students[smallest_workshop[0]][index].append(student)   # exchanged workshop
-                            dict_workshop_students[workshop][missing_session].append(student)   # repeat workshop
-
-                            # remove student from the session where workshop is repeated
-                            dict_workshop_students[workshop][index].remove(student)
-
-                            # remove the student's schedule on the index
-                            dict_student_schedules[student] = {key: value for key, value in dict_student_schedules[student].items() if value != index}
-                            # update the workshop in the student's timetable
-                            dict_student_schedules[student].update({smallest_workshop[0] : index})
-
-                            workshop_with_least_students = workshop
-                            workshop_index = missing_session
-                            break
-                        # if the workshop is full, move on to the next repeated workshop and try again
+                    missing_session = Get_Student_Missing_Session(workshop_indexes)
+                    Rearrange_Session_For_Repeated_Class(student, workshops_already_taken, missing_session)
                     break
                 
                 # Pick the workshop with the least number of students in total
@@ -315,15 +341,15 @@ def Sort_Student_to_Workshop_by_Preference():
                 
                 session_with_least_students = min(filter(lambda x: x is not None, available_sessions_to_take), key=sublist_length)
             
+            if workshop_reorganized: continue
+
             # Assign student to the session
-            if not workshop_reorganized:
-                workshop_index = available_sessions_to_take.index(session_with_least_students)
-                dict_workshop_students[workshop_with_least_students][workshop_index].append(student)
+            workshop_index = available_sessions_to_take.index(session_with_least_students)
+            dict_workshop_students[workshop_with_least_students][workshop_index].append(student)
             
             # put the workshop in the student's timetable
             dict_student_schedules[student].update({workshop_with_least_students : workshop_index})
-        
-    
+    #'''
     # Print the summary
     if debug_mode:
         print("**********WORKSHOP SUMMARY*****************")
