@@ -4,7 +4,7 @@ import os, math
 # TODO: Remove useless code?
 
 # ============= Workshop variables to be customized =============================== #
-excel_file_name = 'Liste_Einteilung Wünsche_Filled.xlsx' #'StudentWorkshop_SampleExcelSheet.xlsx'
+excel_file_name = 'WT_Einteilung_ANO_.xlsx' #'StudentWorkshop_SampleExcelSheet.xlsx'
 sheetname = 'WerkstattStundenplan'
 
 last_name_column = 1 #A
@@ -147,7 +147,7 @@ def Calculate_Max_Students_Per_Workshop():
     number_of_workshops = len(workshop_list)
     maximum = (number_of_students * num_workshops_for_students) / (number_of_workshops * num_workshop_rounds)
     maximum = math.ceil(maximum)
-    if maximum > 13: maximum = 13
+    #if maximum > 13: maximum = 13
     maximum -= 1
     return maximum
 
@@ -172,10 +172,15 @@ def Get_Student_Missing_Session(list_to_compare):
     missing_session = missing_session.pop()
     return missing_session
 
+# TODO: the full class should not appear to be exchanged if the current session is full.
+
 # go through EACH in workshops already taken and see if any can be replaced with another session
 def Rearrange_Session_For_Repeated_Class(student, workshops_already_taken, missing_session):
     for workshop, index in workshops_already_taken.items():
         # make a dict of workshop/sessions with the session index
+        if len(dict_workshop_students[workshop][missing_session]) > max_workshop_size:
+            continue
+        
         new_session_dict = {} # {workshopA : 11(number of students), ...}
         for key, list_of_lists in dict_workshop_students.items():
             if key not in workshops_already_taken:    # make sure not repeat the workshops
@@ -202,7 +207,6 @@ def Rearrange_Session_For_Repeated_Class(student, workshops_already_taken, missi
         # if the workshop is full, move on to the next repeated workshop and try again
     print(student,"took",smallest_workshop[0],"and rearranged",workshop)
     
-
 # Main logic to sort students to workshop based on their preference
 def Sort_Student_to_Workshop_by_Preference():
     global max_workshop_size
