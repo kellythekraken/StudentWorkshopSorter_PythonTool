@@ -4,7 +4,7 @@ import os, math
 # TODO: Remove useless code?
 
 # ============= Workshop variables to be customized =============================== #
-excel_file_name = 'WT_Einteilung_ANO_.xlsx' #'StudentWorkshop_SampleExcelSheet.xlsx'
+excel_file_name = 'WT_Einteilung_JLS.xlsx' #'StudentWorkshop_SampleExcelSheet.xlsx'
 sheetname = 'WerkstattStundenplan'
 
 last_name_column = 1 #A
@@ -15,6 +15,8 @@ student_schedule_column = 15 #O
 
 num_workshops_for_students = 5  # Number of workshops each student must take
 num_workshop_rounds = 5   # Number of sessions/rounds each workshop provides
+
+max_cap_for_students_with_preference = 1 # Number deducted from maximum class count to avoid students filling the class too quickly.
 
 # ============== Do not edit the variables beyond this point! ===================== #
 current_directory = os.path.dirname(os.path.abspath(__file__))
@@ -148,13 +150,13 @@ def Calculate_Max_Students_Per_Workshop():
     maximum = (number_of_students * num_workshops_for_students) / (number_of_workshops * num_workshop_rounds)
     maximum = math.ceil(maximum)
     #if maximum > 13: maximum = 13
-    maximum -= 1
+    print("maximum student per workshop: ",maximum)
+    maximum -= max_cap_for_students_with_preference
     return maximum
 
 dict_student_schedules = {key: {} for key in student_names}  # Keep track of each student and their workshop
 dict_workshop_students = {} # Consist workshop name and 5 lists of student in each session: {Textil:[[student A,B,C],[student D,E,F],[student G,H,I]]; }
 max_workshop_size = Calculate_Max_Students_Per_Workshop()
-print(max_workshop_size)
 
 # Return bool to check if all sessions of a workshop is full
 def Remove_Full_Workshop(max_per_workshop, available_workshops):
@@ -277,8 +279,7 @@ def Sort_Student_to_Workshop_by_Preference():
             dict_student_schedules[student].update({student_choice : workshop_index})
             # go to the next student
 
-    # Remove_Full_Workshop(max_workshop_size,dict_workshop_students,available_workshops)
-    max_workshop_size += 1 # real maximum
+    max_workshop_size += max_cap_for_students_with_preference # real maximum
     
     # Assign workshop for students with no preference
     print("student with no pref:",students_with_no_preference)
